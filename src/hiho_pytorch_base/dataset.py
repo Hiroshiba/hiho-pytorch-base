@@ -11,7 +11,7 @@ from pydantic import TypeAdapter
 from torch.utils.data import Dataset as BaseDataset
 from upath import UPath
 
-from hiho_pytorch_base.config import DataFileConfig, DatasetConfig
+from hiho_pytorch_base.config import DataFileConfig, DatasetConfig, NetworkConfig
 from hiho_pytorch_base.data.data import InputData, OutputData, preprocess
 from hiho_pytorch_base.data.sampling_data import SamplingData
 from hiho_pytorch_base.utility.upath_utility import to_local_path
@@ -77,10 +77,12 @@ class Dataset(BaseDataset[OutputData]):
         self,
         datas: list[LazyInputData],
         config: DatasetConfig,
+        network_config: NetworkConfig,
         is_eval: bool,
     ):
         self.datas = datas
         self.config = config
+        self.network_config = network_config
         self.is_eval = is_eval
 
     def __len__(self):
@@ -91,7 +93,10 @@ class Dataset(BaseDataset[OutputData]):
         """指定されたインデックスのデータを前処理して返す"""
         try:
             return preprocess(
-                self.datas[i].fetch(),
+                feature_vector_size=self.network_config.feature_vector_size,
+                feature_variable_size=self.network_config.feature_variable_size,
+                target_vector_size=self.network_config.target_vector_size,
+                speaker_size=self.network_config.speaker_size,
                 frame_rate=self.config.frame_rate,
                 frame_length=self.config.frame_length,
                 is_eval=self.is_eval,
@@ -232,7 +237,7 @@ def get_datas(config: DataFileConfig) -> list[LazyInputData]:
     return datas
 
 
-def create_dataset(config: DatasetConfig) -> DatasetCollection:
+def create_dataset(config: DatasetConfig, network_config: NetworkConfig) -> DatasetCollection:
     """データセットを作成"""
     # TODO: accent_estimatorのようにHDF5に対応させ、docs/にドキュメントを書く
     datas = get_datas(config.train)
@@ -247,7 +252,7 @@ def create_dataset(config: DatasetConfig) -> DatasetCollection:
     def _wrapper(datas: list[LazyInputData], is_eval: bool) -> Dataset:
         if is_eval:
             datas = datas * config.eval_times_num
-        dataset = Dataset(datas=datas, config=config, is_eval=is_eval)
+        dataset = Dataset(datas=datas, config=config, network_config=network_config, is_eval=is_eval)
         return dataset
 
     return DatasetCollection(

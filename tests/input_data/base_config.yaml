@@ -16,19 +16,19 @@ dataset:
     speaker_dict_path: "tests/data/test_data/speaker_dict.json"
     root_dir: "tests/data/test_data"
   train_num: null
-  test_num: 10
+  test_num: 50
   eval_for_test: true
   eval_times_num: 1
   seed: 42
-  frame_rate: 10.0
-  frame_length: 50
+  frame_rate: 100.0
+  frame_length: 100
 
 network:
   feature_vector_size: 16
-  feature_variable_size: 32
-  hidden_size: 32
+  feature_variable_size: 128
+  hidden_size: 128
   target_vector_size: 3
-  conformer_block_num: 4
+  conformer_block_num: 8
   conformer_dropout_rate: 0.1
   speaker_size: 3
   speaker_embedding_size: 8
@@ -36,22 +36,22 @@ network:
 model: {}
 
 train:
-  batch_size: 4
+  batch_size: 64
   gradient_accumulation: 2
-  eval_batch_size: 8
-  log_epoch: 2
-  eval_epoch: 4
-  snapshot_epoch: 4
-  stop_epoch: 20
+  eval_batch_size: 4
+  log_epoch: 5
+  eval_epoch: 5
+  snapshot_epoch: 5
+  stop_epoch: 100
   model_save_num: 2
   optimizer:
     name: "RAdamScheduleFree"
     lr: 0.003
   scheduler: null
   prefetch_workers: 256
-  preprocess_workers: 0
-  use_gpu: false
-  use_amp: false
+  preprocess_workers: 4
+  use_gpu: true
+  use_amp: true
 
 project:
   name: "test_project"

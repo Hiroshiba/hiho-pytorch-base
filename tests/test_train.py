@@ -36,7 +36,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]):
 
 def test_dataset_creation(train_config: Config) -> None:
     """データセットの作成テスト"""
-    datasets = create_dataset(train_config.dataset)
+    datasets = create_dataset(train_config.dataset, train_config.network)
 
     assert datasets.train is not None
     assert datasets.test is not None

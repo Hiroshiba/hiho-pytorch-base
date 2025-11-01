@@ -26,6 +26,7 @@ from hiho_pytorch_base.evaluator import (
 from hiho_pytorch_base.generator import Generator
 from hiho_pytorch_base.model import Model, ModelOutput
 from hiho_pytorch_base.network.predictor import Predictor, create_predictor
+from hiho_pytorch_base.utility.profiler import get_profiler
 from hiho_pytorch_base.utility.pytorch_utility import (
     init_weights,
     make_optimizer,
@@ -159,7 +160,7 @@ def setup_training_context(
     config.validate_config()
 
     # dataset
-    datasets = create_dataset(config.dataset)
+    datasets = create_dataset(config.dataset, config.network)
 
     # prefetch
     train_indices = torch.randperm(len(datasets.train)).tolist()
@@ -291,6 +292,10 @@ def load_snapshot(context: TrainingContext) -> None:
 
 def train_one_epoch(context: TrainingContext) -> TrainingResults:
     """１エポックの学習処理"""
+    profiler = get_profiler()
+    profiler.set_epoch(context.epoch)
+    profiler.record("train_epoch_start")
+
     context.model.train()
     if hasattr(context.optimizer, "train"):
         context.optimizer.train()  # type: ignore
@@ -318,16 +323,22 @@ def train_one_epoch(context: TrainingContext) -> TrainingResults:
             context.scaler.update()
             context.optimizer.zero_grad()
             context.iteration += 1
+            profiler.set_iteration(context.iteration)
+            profiler.record("train_iteration_end")
 
     if context.scheduler is not None:
         context.scheduler.step()
 
+    profiler.record("train_epoch_end")
     return TrainingResults(train=reduce_result(train_results))
 
 
 @torch.no_grad()
 def evaluate(context: TrainingContext) -> EvaluationResults:
     """評価値を計算する"""
+    profiler = get_profiler()
+    profiler.record("evaluate_start")
+
     context.model.eval()
     if hasattr(context.optimizer, "eval"):
         context.optimizer.eval()  # type: ignore
@@ -345,23 +356,32 @@ def evaluate(context: TrainingContext) -> EvaluationResults:
     # eval評価
     eval_result = None
     if context.eval_loader is not None:
+        profiler.record("eval_start")
         eval_result_list: list[EvaluatorOutput] = []
         for batch in context.eval_loader:
+            profiler.record("eval_iteration_start")
             batch = batch.to_device(context.device, non_blocking=True)
             evaluator_result: EvaluatorOutput = context.evaluator(batch)
             eval_result_list.append(evaluator_result.detach_cpu())
+            profiler.record("eval_iteration_end")
         eval_result = reduce_result(eval_result_list)
+        profiler.record("eval_end")
 
     # valid評価
     valid_result = None
     if context.valid_loader is not None:
+        profiler.record("valid_start")
         valid_result_list: list[EvaluatorOutput] = []
         for batch in context.valid_loader:
+            profiler.record("valid_iteration_start")
             batch = batch.to_device(context.device, non_blocking=True)
             evaluator_result: EvaluatorOutput = context.evaluator(batch)
             valid_result_list.append(evaluator_result.detach_cpu())
+            profiler.record("valid_iteration_end")
         valid_result = reduce_result(valid_result_list)
+        profiler.record("valid_end")
 
+    profiler.record("evaluate_end")
     return EvaluationResults(test=test_result, eval=eval_result, valid=valid_result)
 
 

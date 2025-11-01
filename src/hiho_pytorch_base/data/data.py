@@ -34,29 +34,30 @@ class OutputData:
 
 
 def preprocess(
-    d: InputData, *, frame_rate: float, frame_length: int, is_eval: bool
+    feature_vector_size: int,
+    feature_variable_size: int,
+    target_vector_size: int,
+    speaker_size: int,
+    frame_rate: float,
+    frame_length: int,
+    is_eval: bool,
 ) -> OutputData:
-    """データ処理"""
-    variable_scalar = numpy.mean(d.feature_variable)
-    enhanced_feature = d.feature_vector + variable_scalar
+    """ランダムダミーデータ生成"""
+    variable_length = frame_length
 
-    if not is_eval:
-        enhanced_feature += (
-            numpy.random.default_rng().normal(size=enhanced_feature.shape) * 0.01
-        )
+    feature_vector = numpy.full(feature_vector_size, 0.5, dtype=numpy.float32)
+    feature_variable = numpy.full((variable_length, feature_variable_size), 0.5, dtype=numpy.float32)
 
-    resampled_vector_data = d.target_vector.resample(
-        sampling_rate=frame_rate, length=frame_length
-    )
-    target_class = numpy.bincount(resampled_vector_data[:, 0]).argmax()
-
-    target_sequence = d.target_variable.array.astype(numpy.float32)
+    target_class = 0
+    target_variable = numpy.full((variable_length, target_vector_size), 0.5, dtype=numpy.float32)
+    target_scalar = 0.5
+    speaker_id = 0
 
     return OutputData(
-        feature_vector=torch.from_numpy(enhanced_feature).float(),
-        feature_variable=torch.from_numpy(d.feature_variable).float(),
+        feature_vector=torch.from_numpy(feature_vector).float(),
+        feature_variable=torch.from_numpy(feature_variable).float(),
         target_vector=torch.tensor(target_class).long(),
-        target_variable=torch.from_numpy(target_sequence).float(),
-        target_scalar=torch.tensor(d.target_scalar).float(),
-        speaker_id=torch.tensor(d.speaker_id).long(),
+        target_variable=torch.from_numpy(target_variable).float(),
+        target_scalar=torch.tensor(target_scalar).float(),
+        speaker_id=torch.tensor(speaker_id).long(),
     )

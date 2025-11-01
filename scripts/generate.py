@@ -65,7 +65,7 @@ def generate(
         config=config, predictor=to_local_path(predictor_path), use_gpu=use_gpu
     )
 
-    dataset = create_dataset(config.dataset).get(dataset_type)
+    dataset = create_dataset(config.dataset, config.network).get(dataset_type)
     data_loader = DataLoader(
         dataset=dataset,
         batch_size=1,

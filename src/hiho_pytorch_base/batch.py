@@ -7,6 +7,7 @@ import torch
 from torch import Tensor
 
 from hiho_pytorch_base.data.data import OutputData
+from hiho_pytorch_base.utility.profiler import get_profiler
 from hiho_pytorch_base.utility.pytorch_utility import to_device
 
 
@@ -57,7 +58,7 @@ def collate_dataset_output(data_list: list[OutputData]) -> BatchOutput:
     if len(data_list) == 0:
         raise ValueError("batch is empty")
 
-    return BatchOutput(
+    batch = BatchOutput(
         feature_vector=collate_stack([d.feature_vector for d in data_list]),
         feature_variable_list=[d.feature_variable for d in data_list],
         target_vector=collate_stack([d.target_vector for d in data_list]),
@@ -65,3 +66,7 @@ def collate_dataset_output(data_list: list[OutputData]) -> BatchOutput:
         target_scalar=collate_stack([d.target_scalar for d in data_list]),
         speaker_id=collate_stack([d.speaker_id for d in data_list]),
     )
+
+    profiler = get_profiler()
+    profiler.record("batch_created")
+    return batch

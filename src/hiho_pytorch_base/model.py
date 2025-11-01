@@ -10,6 +10,7 @@ from torch.nn.functional import cross_entropy, mse_loss
 from hiho_pytorch_base.batch import BatchOutput
 from hiho_pytorch_base.config import ModelConfig
 from hiho_pytorch_base.network.predictor import Predictor
+from hiho_pytorch_base.utility.profiler import get_profiler
 from hiho_pytorch_base.utility.pytorch_utility import detach_cpu
 from hiho_pytorch_base.utility.train_utility import DataNumProtocol
 
@@ -57,6 +58,9 @@ class Model(nn.Module):
 
     def forward(self, batch: BatchOutput) -> ModelOutput:
         """データをネットワークに入力して損失などを計算する"""
+        profiler = get_profiler()
+        profiler.record("model_forward_start")
+
         (
             vector_output,  # (B, ?)
             variable_output_list,  # [(L, ?)]
@@ -66,6 +70,7 @@ class Model(nn.Module):
             feature_variable_list=batch.feature_variable_list,
             speaker_id=batch.speaker_id,
         )
+        profiler.record("predictor_forward_end")
 
         target_vector = batch.target_vector  # (B,)
         variable_output = torch.cat(variable_output_list)
@@ -78,6 +83,7 @@ class Model(nn.Module):
         total_loss = loss_vector + loss_variable + loss_scalar
         acc = accuracy(vector_output, target_vector)
 
+        profiler.record("model_forward_end")
         return ModelOutput(
             loss=total_loss,
             loss_vector=loss_vector,
