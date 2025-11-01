@@ -18,7 +18,7 @@ class GeneratorOutput:
     """生成したデータ"""
 
     vector_output: Tensor  # (B, ?)
-    variable_output_list: list[Tensor]  # [(L, ?)]
+    variable_output_padded: Tensor  # (B, L, ?)
     scalar_output: Tensor  # (B,)
 
 
@@ -60,31 +60,23 @@ class Generator(nn.Module):
         self,
         *,
         feature_vector: TensorLike,  # (B, ?)
-        feature_variable_list: list[TensorLike],  # [(vL, ?)]
+        feature_variable_nt: Tensor,  # NestedTensor (jagged)
         speaker_id: TensorLike,  # (B,)
     ) -> GeneratorOutput:
         """生成経路で推論する"""
 
-        def _convert(
-            data: TensorLike | list[TensorLike],
-        ):
-            if isinstance(data, list):
-                return [to_tensor(item, self.device) for item in data]
-            else:
-                return to_tensor(data, self.device)
-
         (
             vector_output,  # (B, ?)
-            variable_output_list,  # [(L, ?)]
+            variable_output_padded,  # (B, L, ?)
             scalar_output,  # (B,)
         ) = self.predictor(
-            feature_vector=_convert(feature_vector),
-            feature_variable_list=_convert(feature_variable_list),
-            speaker_id=_convert(speaker_id),
+            feature_vector=to_tensor(feature_vector, self.device),
+            feature_variable_nt=feature_variable_nt.to(self.device),
+            speaker_id=to_tensor(speaker_id, self.device),
         )
 
         return GeneratorOutput(
             vector_output=vector_output,
-            variable_output_list=variable_output_list,
+            variable_output_padded=variable_output_padded,
             scalar_output=scalar_output,
         )

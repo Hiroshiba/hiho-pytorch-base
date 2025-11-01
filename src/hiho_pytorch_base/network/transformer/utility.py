@@ -18,3 +18,8 @@ def make_pad_mask(length: torch.Tensor):
 def make_non_pad_mask(length: torch.Tensor):
     """非パディングマスクを生成"""
     return ~make_pad_mask(length=length)
+
+
+def make_length_mask(lengths: torch.Tensor, max_length: int) -> torch.Tensor:
+    """lengthsとmax_lengthから有効部分のマスクを生成（torch.compile対応）"""
+    return torch.arange(max_length, device=lengths.device)[None, :] < lengths[:, None]

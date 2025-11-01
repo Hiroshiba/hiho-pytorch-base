@@ -2,11 +2,10 @@
 
 import torch
 from torch import Tensor, nn
-from torch.nn.utils.rnn import pad_sequence
 
 from hiho_pytorch_base.config import NetworkConfig
 from hiho_pytorch_base.network.conformer.encoder import Encoder
-from hiho_pytorch_base.network.transformer.utility import make_non_pad_mask
+from hiho_pytorch_base.network.transformer.utility import make_length_mask
 
 
 class Predictor(nn.Module):
@@ -39,23 +38,13 @@ class Predictor(nn.Module):
         self,
         *,
         feature_vector: Tensor,  # (B, ?)
-        feature_variable_list: list[Tensor],  # [(vL, ?)]
+        feature_variable_nt: Tensor,  # NestedTensor (jagged)
         speaker_id: Tensor,  # (B,)
-    ) -> tuple[Tensor, list[Tensor], Tensor]:  # (B, ?), [(vL, ?)], (B,)
-        device = feature_vector.device
+    ) -> tuple[Tensor, Tensor, Tensor]:  # (B, ?), (B, L, ?), (B,)
         batch_size = feature_vector.size(0)
+        feature_variable_lengths = feature_variable_nt.offsets().diff()
 
-        lengths = torch.tensor(
-            [var_data.shape[0] for var_data in feature_variable_list], device=device
-        )
-
-        if batch_size == 1:
-            # NOTE: ONNX化の際にpad_sequenceがエラーになるため迂回
-            padded_variable = feature_variable_list[0].unsqueeze(0)  # (1, L, ?)
-        else:
-            padded_variable = pad_sequence(
-                feature_variable_list, batch_first=True
-            )  # (B, L, ?)
+        padded_variable = feature_variable_nt.to_padded_tensor(0.0)  # (B, L, ?)
 
         speaker_embedding = self.speaker_embedder(speaker_id)  # (B, ?)
 
@@ -70,7 +59,8 @@ class Predictor(nn.Module):
 
         h = self.pre_conformer(combined_variable)  # (B, L, ?)
 
-        mask = make_non_pad_mask(lengths).unsqueeze(-2).to(device)  # (B, 1, L)
+        mask = make_length_mask(feature_variable_lengths, max_length)  # (B, L)
+        mask = mask.unsqueeze(-2)  # (B, 1, L)
 
         encoded, _ = self.encoder(x=h, cond=None, mask=mask)  # (B, L, ?)
 
@@ -79,7 +69,7 @@ class Predictor(nn.Module):
         mask_expanded = mask.squeeze(-2).unsqueeze(-1)  # (B, L, 1)
         masked_encoded = encoded * mask_expanded  # (B, L, ?)
         variable_sum = masked_encoded.sum(dim=1)  # (B, ?)
-        variable_mean = variable_sum / lengths.unsqueeze(-1).float()  # (B, ?)
+        variable_mean = variable_sum / feature_variable_lengths.unsqueeze(-1).float()  # (B, ?)
 
         fixed_features = self.feature_vector_processor(feature_vector)  # (B, ?)
 
@@ -88,11 +78,7 @@ class Predictor(nn.Module):
         vector_output = self.vector_head(final_features)  # (B, ?)
         scalar_output = self.scalar_head(final_features).squeeze(-1)  # (B,)
 
-        variable_output_list = [
-            variable_features[i, :length] for i, length in enumerate(lengths)
-        ]
-
-        return vector_output, variable_output_list, scalar_output
+        return vector_output, variable_features, scalar_output
 
 
 def create_predictor(config: NetworkConfig) -> Predictor:

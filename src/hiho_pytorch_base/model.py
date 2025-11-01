@@ -10,6 +10,7 @@ from torch.nn.functional import cross_entropy, mse_loss
 from hiho_pytorch_base.batch import BatchOutput
 from hiho_pytorch_base.config import ModelConfig
 from hiho_pytorch_base.network.predictor import Predictor
+from hiho_pytorch_base.network.transformer.utility import make_length_mask
 from hiho_pytorch_base.utility.profiler import get_profiler
 from hiho_pytorch_base.utility.pytorch_utility import detach_cpu
 from hiho_pytorch_base.utility.train_utility import DataNumProtocol
@@ -63,22 +64,29 @@ class Model(nn.Module):
 
         (
             vector_output,  # (B, ?)
-            variable_output_list,  # [(L, ?)]
+            variable_output_padded,  # (B, L, ?)
             scalar_output,  # (B,)
         ) = self.predictor(
             feature_vector=batch.feature_vector,
-            feature_variable_list=batch.feature_variable_list,
+            feature_variable_nt=batch.feature_variable_nt,
             speaker_id=batch.speaker_id,
         )
         profiler.record("predictor_forward_end")
 
         target_vector = batch.target_vector  # (B,)
-        variable_output = torch.cat(variable_output_list)
-        target_variable = torch.cat(batch.target_variable_list)
         target_scalar = batch.target_scalar  # (B,)
 
+        target_variable_padded = batch.target_variable_nt.to_padded_tensor(0.0)
+
+        max_length = variable_output_padded.size(1)
+        target_variable_lengths = batch.target_variable_nt.offsets().diff()
+        mask = make_length_mask(target_variable_lengths, max_length)  # (B, L)
+        mask_expanded = mask.unsqueeze(-1)  # (B, L, 1)
+
+        masked_squared_diff = (variable_output_padded - target_variable_padded).pow(2) * mask_expanded
+        loss_variable = masked_squared_diff.sum() / mask.sum()
+
         loss_vector = cross_entropy(vector_output, target_vector)
-        loss_variable = mse_loss(variable_output, target_variable)
         loss_scalar = mse_loss(scalar_output, target_scalar)
         total_loss = loss_vector + loss_variable + loss_scalar
         acc = accuracy(vector_output, target_vector)
