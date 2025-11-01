@@ -322,6 +322,41 @@ def train_one_step(
     return result
 
 
+@torch.compile(dynamic=True)
+def test_one_step(
+    context: TrainingContext,
+    batch: BatchOutput,
+) -> ModelOutput:
+    """１ステップのテスト処理"""
+    batch = batch.to_device(context.device, non_blocking=True)
+    result: ModelOutput = context.model(batch)
+
+    # FIXME: なんとか関数化したい
+    result.loss = result.loss.detach().cpu()
+    result.loss_vector = result.loss_vector.detach().cpu()
+    result.loss_variable = result.loss_variable.detach().cpu()
+    result.loss_scalar = result.loss_scalar.detach().cpu()
+    result.accuracy = result.accuracy.detach().cpu()
+
+    return result
+
+
+@torch.compile(dynamic=True)
+def eval_one_step(
+    context: TrainingContext,
+    batch: BatchOutput,
+) -> EvaluatorOutput:
+    """１ステップの評価処理"""
+    batch = batch.to_device(context.device, non_blocking=True)
+    result: EvaluatorOutput = context.evaluator(batch)
+
+    # FIXME: なんとか関数化したい
+    result.loss = result.loss.detach().cpu()
+    result.accuracy = result.accuracy.detach().cpu()
+
+    return result
+
+
 def train_one_epoch(context: TrainingContext) -> TrainingResults:
     """１エポックの学習処理"""
     context.model.train()
@@ -355,9 +390,8 @@ def evaluate(context: TrainingContext) -> EvaluationResults:
     # test評価
     test_result_list: list[ModelOutput] = []
     for batch in context.test_loader:
-        batch = batch.to_device(context.device, non_blocking=True)
-        model_result: ModelOutput = context.model(batch)
-        test_result_list.append(model_result.detach_cpu())
+        model_result: ModelOutput = test_one_step(context, batch)
+        test_result_list.append(model_result)
     test_result = reduce_result(test_result_list)
 
     # eval評価
@@ -365,9 +399,8 @@ def evaluate(context: TrainingContext) -> EvaluationResults:
     if context.eval_loader is not None:
         eval_result_list: list[EvaluatorOutput] = []
         for batch in context.eval_loader:
-            batch = batch.to_device(context.device, non_blocking=True)
-            evaluator_result: EvaluatorOutput = context.evaluator(batch)
-            eval_result_list.append(evaluator_result.detach_cpu())
+            evaluator_result: EvaluatorOutput = eval_one_step(context, batch)
+            eval_result_list.append(evaluator_result)
         eval_result = reduce_result(eval_result_list)
 
     # valid評価
@@ -375,9 +408,8 @@ def evaluate(context: TrainingContext) -> EvaluationResults:
     if context.valid_loader is not None:
         valid_result_list: list[EvaluatorOutput] = []
         for batch in context.valid_loader:
-            batch = batch.to_device(context.device, non_blocking=True)
-            evaluator_result: EvaluatorOutput = context.evaluator(batch)
-            valid_result_list.append(evaluator_result.detach_cpu())
+            evaluator_result: EvaluatorOutput = eval_one_step(context, batch)
+            valid_result_list.append(evaluator_result)
         valid_result = reduce_result(valid_result_list)
 
     return EvaluationResults(test=test_result, eval=eval_result, valid=valid_result)
