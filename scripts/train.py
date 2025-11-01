@@ -289,7 +289,7 @@ def load_snapshot(context: TrainingContext) -> None:
         context.scheduler.last_epoch = context.epoch
 
 
-@torch.compile()
+@torch.compile(dynamic=True)
 def train_one_step(
     context: TrainingContext,
     batch: BatchOutput,
@@ -313,7 +313,14 @@ def train_one_step(
         context.optimizer.zero_grad()
         context.iteration += 1
 
-    return result.detach_cpu()
+    # FIXME: なんとか関数化したい
+    result.loss = result.loss.detach().cpu()
+    result.loss_vector = result.loss_vector.detach().cpu()
+    result.loss_variable = result.loss_variable.detach().cpu()
+    result.loss_scalar = result.loss_scalar.detach().cpu()
+    result.accuracy = result.accuracy.detach().cpu()
+
+    return result
 
 
 def train_one_epoch(context: TrainingContext) -> TrainingResults:
