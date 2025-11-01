@@ -45,7 +45,7 @@ class Evaluator(nn.Module):
 
         output_result: GeneratorOutput = self.generator(
             feature_vector=batch.feature_vector,
-            feature_variable_list=batch.feature_variable_list,
+            feature_variable_nt=batch.feature_variable_nt,
             speaker_id=batch.speaker_id,
         )
 
