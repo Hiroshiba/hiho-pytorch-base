@@ -45,7 +45,7 @@ train:
   stop_epoch: 100
   model_save_num: 2
   optimizer:
-    name: "RAdamScheduleFree"
+    name: "Adam"
     lr: 0.003
   scheduler: null
   prefetch_workers: 256
