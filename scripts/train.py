@@ -213,15 +213,14 @@ def setup_training_context(
     print("predictor:", predictor)
 
     # model
-    predictor_scripted: Predictor = torch.jit.script(predictor)  # type: ignore
-    model = Model(model_config=config.model, predictor=predictor_scripted)
+    model = Model(model_config=config.model, predictor=predictor)
     if config.train.weight_initializer is not None:
         init_weights(model, name=config.train.weight_initializer)
     model.to(device)
 
     # evaluator
     generator = Generator(
-        config=config, predictor=predictor_scripted, use_gpu=config.train.use_gpu
+        config=config, predictor=predictor, use_gpu=config.train.use_gpu
     )
     evaluator = Evaluator(generator=generator)
 
@@ -289,35 +288,47 @@ def load_snapshot(context: TrainingContext) -> None:
         context.scheduler.last_epoch = context.epoch
 
 
+@torch.compile()
+def train_one_step(
+    context: TrainingContext,
+    batch: BatchOutput,
+    batch_index: int,
+) -> ModelOutput:
+    """１ステップの学習処理"""
+    with autocast(context.device, enabled=context.config.train.use_amp):
+        batch = batch.to_device(context.device, non_blocking=True)
+        result: ModelOutput = context.model(batch)
+
+    gradient_accumulation = context.config.train.gradient_accumulation
+    loss = result.loss / gradient_accumulation
+    if loss.isnan():
+        raise ValueError("loss is NaN")
+
+    context.scaler.scale(loss).backward()
+
+    if batch_index % gradient_accumulation == 0:
+        context.scaler.step(context.optimizer)
+        context.scaler.update()
+        context.optimizer.zero_grad()
+        context.iteration += 1
+
+    return result.detach_cpu()
+
+
 def train_one_epoch(context: TrainingContext) -> TrainingResults:
     """１エポックの学習処理"""
     context.model.train()
     if hasattr(context.optimizer, "train"):
         context.optimizer.train()  # type: ignore
 
-    gradient_accumulation = context.config.train.gradient_accumulation
     context.optimizer.zero_grad()  # NOTE: 端数分の勾配を消す
 
     batch: BatchOutput
     train_results: list[ModelOutput] = []
 
     for batch_index, batch in enumerate(context.train_loader, start=1):
-        with autocast(context.device, enabled=context.config.train.use_amp):
-            batch = batch.to_device(context.device, non_blocking=True)
-            result: ModelOutput = context.model(batch)
-
-        loss = result.loss / gradient_accumulation
-        if loss.isnan():
-            raise ValueError("loss is NaN")
-
-        context.scaler.scale(loss).backward()
-        train_results.append(result.detach_cpu())
-
-        if batch_index % gradient_accumulation == 0:
-            context.scaler.step(context.optimizer)
-            context.scaler.update()
-            context.optimizer.zero_grad()
-            context.iteration += 1
+        result: ModelOutput = train_one_step(context, batch, batch_index)
+        train_results.append(result)
 
     if context.scheduler is not None:
         context.scheduler.step()
