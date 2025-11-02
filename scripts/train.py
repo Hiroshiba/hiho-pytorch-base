@@ -314,11 +314,11 @@ def train_one_step(
         context.iteration += 1
 
     # FIXME: なんとか関数化したい
-    result.loss = result.loss.detach().cpu()
-    result.loss_vector = result.loss_vector.detach().cpu()
-    result.loss_variable = result.loss_variable.detach().cpu()
-    result.loss_scalar = result.loss_scalar.detach().cpu()
-    result.accuracy = result.accuracy.detach().cpu()
+    result.loss = result.loss.detach()
+    result.loss_vector = result.loss_vector.detach()
+    result.loss_variable = result.loss_variable.detach()
+    result.loss_scalar = result.loss_scalar.detach()
+    result.accuracy = result.accuracy.detach()
 
     return result
 
@@ -333,11 +333,11 @@ def test_one_step(
     result: ModelOutput = context.model(batch)
 
     # FIXME: なんとか関数化したい
-    result.loss = result.loss.detach().cpu()
-    result.loss_vector = result.loss_vector.detach().cpu()
-    result.loss_variable = result.loss_variable.detach().cpu()
-    result.loss_scalar = result.loss_scalar.detach().cpu()
-    result.accuracy = result.accuracy.detach().cpu()
+    result.loss = result.loss.detach()
+    result.loss_vector = result.loss_vector.detach()
+    result.loss_variable = result.loss_variable.detach()
+    result.loss_scalar = result.loss_scalar.detach()
+    result.accuracy = result.accuracy.detach()
 
     return result
 
@@ -352,8 +352,8 @@ def eval_one_step(
     result: EvaluatorOutput = context.evaluator(batch)
 
     # FIXME: なんとか関数化したい
-    result.loss = result.loss.detach().cpu()
-    result.accuracy = result.accuracy.detach().cpu()
+    result.loss = result.loss.detach()
+    result.accuracy = result.accuracy.detach()
 
     return result
 
