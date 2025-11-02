@@ -24,7 +24,7 @@ def setup_data_and_config(base_config_path: Path, data_dir: UPath) -> Config:
     config.dataset.valid.root_dir = data_dir
 
     root_dir = config.dataset.train.root_dir
-    train_num, valid_num = 1000, 100
+    train_num, valid_num = 10000, 100
     all_stems = list(map(str, range(train_num + valid_num)))
 
     def _setup_data(
