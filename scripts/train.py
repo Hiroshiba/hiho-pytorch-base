@@ -302,7 +302,6 @@ def train_one_step(
 
     gradient_accumulation = context.config.train.gradient_accumulation
     loss = result.loss / gradient_accumulation
-    torch._assert(loss.isfinite(), "loss is not finite")
 
     context.scaler.scale(loss).backward()
 
@@ -375,6 +374,8 @@ def train_one_epoch(context: TrainingContext) -> TrainingResults:
 
     for batch_index, batch in enumerate(context.train_loader, start=1):
         result: ModelOutput = train_one_step(context, batch, batch_index)
+        if not result.loss.isfinite():
+            raise ValueError("loss is not finite")
         train_results.append(result)
 
         if batch_index % gradient_accumulation == 0:
