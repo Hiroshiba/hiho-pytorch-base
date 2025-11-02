@@ -155,7 +155,7 @@ class SaveManager:
 
     def save(self, value: float, step: int):
         """最良と最新を管理"""
-        if math.isnan(value):
+        if not math.isfinite(value):
             return
 
         delete_steps: set[int] = set()

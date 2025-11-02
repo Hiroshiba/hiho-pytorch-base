@@ -302,8 +302,7 @@ def train_one_step(
 
     gradient_accumulation = context.config.train.gradient_accumulation
     loss = result.loss / gradient_accumulation
-    if loss.isnan():
-        raise ValueError("loss is NaN")
+    torch._assert(loss.isfinite(), "loss is not finite")
 
     context.scaler.scale(loss).backward()
 
