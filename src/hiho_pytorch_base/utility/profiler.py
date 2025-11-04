@@ -23,8 +23,8 @@ class SpeedProfiler:
             return
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_path = Path(f"speed_profile_{timestamp}.csv")
-        self.usage_path = Path(f"speed_profile_{timestamp}_usage.csv")
+        self.output_path = Path(f"/tmp/speed_profile_{timestamp}.csv")
+        self.usage_path = Path(f"/tmp/speed_profile_{timestamp}_usage.csv")
         self._start_time = time.time()
         self._stop_monitoring = False
 
@@ -55,6 +55,8 @@ class SpeedProfiler:
         self._monitoring_thread.start()
 
         SpeedProfiler._initialized = True
+
+        print(f"SpeedProfiler initialized. Output: {self.output_path}, Usage: {self.usage_path}")
 
     @classmethod
     def get_instance(cls) -> "SpeedProfiler":
