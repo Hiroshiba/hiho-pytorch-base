@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import torch.nn.functional as F
 import yaml
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
@@ -39,6 +40,8 @@ from hiho_pytorch_base.utility.train_utility import (
     reduce_result,
 )
 from hiho_pytorch_base.utility.upath_utility import to_local_path
+
+torch._dynamo.disallow_in_graph(F.embedding)
 
 
 def _delete_data_num(output: DataNumProtocol) -> dict[str, Any]:
@@ -289,7 +292,7 @@ def load_snapshot(context: TrainingContext) -> None:
         context.scheduler.last_epoch = context.epoch
 
 
-@torch.compile(dynamic=True)
+@torch.compile(dynamic=True, mode="reduce-overhead")
 def train_one_step(
     context: TrainingContext,
     batch: BatchOutput,
@@ -321,7 +324,7 @@ def train_one_step(
     return result
 
 
-@torch.compile(dynamic=True)
+@torch.compile(dynamic=True, mode="reduce-overhead")
 def test_one_step(
     context: TrainingContext,
     batch: BatchOutput,
@@ -340,7 +343,7 @@ def test_one_step(
     return result
 
 
-@torch.compile(dynamic=True)
+@torch.compile(dynamic=True, mode="reduce-overhead")
 def eval_one_step(
     context: TrainingContext,
     batch: BatchOutput,

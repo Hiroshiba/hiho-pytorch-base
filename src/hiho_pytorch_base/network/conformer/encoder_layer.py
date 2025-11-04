@@ -3,6 +3,7 @@
 # Original Code Copyright ESPnet
 # Apache 2.0 (http://www.apache.org/licenses/LICENSE-2.0)
 
+import torch
 from torch import Tensor, nn
 from torch.nn import LayerNorm
 
@@ -28,7 +29,10 @@ class EncoderLayer(nn.Module):
 
         self.macaron_feed_forward = macaron_feed_forward
         self.feed_forward = feed_forward
-        self.ff_scale = 1.0 if macaron_feed_forward is None else 0.5
+        self.register_buffer(
+            "ff_scale",
+            torch.tensor(1.0 if macaron_feed_forward is None else 0.5),
+        )
 
         self.norm_ff = LayerNorm(hidden_size, eps=1e-12)
         self.norm_mha = LayerNorm(hidden_size, eps=1e-12)

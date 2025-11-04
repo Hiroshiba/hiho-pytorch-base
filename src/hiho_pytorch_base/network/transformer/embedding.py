@@ -17,7 +17,7 @@ class PositionalEncoding(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        self.xscale = math.sqrt(self.hidden_size)
+        self.register_buffer("xscale", torch.tensor(math.sqrt(self.hidden_size)))
         self.dropout = nn.Dropout(p=dropout_rate)
         self.cycle_length = cycle_length
         self.register_buffer("pe", torch.zeros(1, 5000, hidden_size))
@@ -57,7 +57,7 @@ class RelPositionalEncoding(nn.Module):
     ):
         super().__init__()
         self.hidden_size = hidden_size
-        self.xscale = math.sqrt(self.hidden_size)
+        self.register_buffer("xscale", torch.tensor(math.sqrt(self.hidden_size)))
         self.dropout = nn.Dropout(p=dropout_rate)
         self.cycle_length = cycle_length
         self.register_buffer("pe", torch.zeros(1, 5000 * 2 - 1, hidden_size))
