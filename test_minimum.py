@@ -7,16 +7,12 @@ from torch import nn
 class MinimalModule(nn.Module):
     def __init__(self):
         super().__init__()
-        self.norm = nn.LayerNorm(32)
-        self.linear = nn.Linear(32, 32)
-        self.dropout = nn.Dropout(0.1)
+        self.linear = nn.Linear(8, 8)
         self.scale = 0.5
 
     def forward(self, x):
-        residual = x
-        x = self.norm(x)
         x = self.linear(x)
-        x = residual + self.scale * self.dropout(x)
+        x = self.scale * x
         return x
 
 
@@ -30,9 +26,9 @@ def train_step(layers, x):
 
 
 def main():
-    print("Testing with 2 layers, 1 norm, 1 linear...", flush=True)
+    print("Testing with 2 layers...", flush=True)
     layers = nn.ModuleList([MinimalModule().cuda() for _ in range(2)])
-    x = torch.randn(4, 50, 32, device="cuda", requires_grad=True)
+    x = torch.randn(2, 10, 8, device="cuda", requires_grad=True)
 
     print("Running train_step...", flush=True)
     loss = train_step(layers, x)
