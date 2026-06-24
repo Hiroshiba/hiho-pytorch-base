@@ -1,13 +1,14 @@
 """機械学習プロジェクトの設定モジュール"""
 
+from pathlib import Path
 from typing import Any, Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, PositiveInt
 from upath import UPath
 
 from .utility.git_utility import get_branch_name, get_commit_id
-from .utility.upath_utility import UPathField, to_local_path
+from .utility.upath_utility import UPathField
 
 
 class _Model(BaseModel):
@@ -32,6 +33,8 @@ class DatasetConfig(_Model):
     train: DataFileConfig
     valid: DataFileConfig | None = None
     hdf5_cache_dir: UPathField | None = None
+    local_cache_dir: Path
+    max_concurrent_downloads: PositiveInt
     train_num: int | None = None
     test_num: int
     valid_num: int | None = None
@@ -76,7 +79,6 @@ class TrainConfig(_Model):
     scheduler: dict[str, Any] | None = None
     weight_initializer: str | None = None
     pretrained_predictor_path: UPathField | None = None
-    prefetch_workers: int = 256
     preprocess_workers: int | None = None
     use_gpu: bool = True
     use_amp: bool = True
@@ -108,7 +110,7 @@ class Config(_Model):
     @staticmethod
     def load(config_path: UPath) -> "Config":
         """設定ファイルから読み込む"""
-        return Config.from_dict(yaml.safe_load(to_local_path(config_path).read_text()))
+        return Config.from_dict(yaml.safe_load(config_path.read_text()))
 
     def to_dict(self) -> dict[str, Any]:
         """辞書に変換"""

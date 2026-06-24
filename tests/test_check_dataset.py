@@ -14,7 +14,7 @@ def test_check_dataset_basic(train_config: Config, tmp_path: Path) -> None:
     config_path = tmp_path / "test_config.yaml"
     train_config.save(UPath(config_path))
 
-    check_dataset(UPath(config_path), trials=1, break_on_error=False)
+    check_dataset(UPath(config_path), trials=1)
 
 
 def test_check_dataset_with_missing_data_files(
@@ -31,4 +31,4 @@ def test_check_dataset_with_missing_data_files(
     Config.from_dict(config_dict).save(UPath(config_path))
 
     with pytest.raises(FileNotFoundError):
-        check_dataset(UPath(config_path), trials=1, break_on_error=False)
+        check_dataset(UPath(config_path), trials=1)

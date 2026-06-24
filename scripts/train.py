@@ -2,7 +2,6 @@
 
 import argparse
 import os
-from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass
 from io import BytesIO
 from typing import Any
@@ -10,12 +9,18 @@ from typing import Any
 import torch
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
-from torch.utils.data import DataLoader, Dataset, Sampler
+from torch.utils.data import DataLoader, RandomSampler
 from upath import UPath
 
-from hiho_pytorch_base.batch import BatchOutput, collate_dataset_output
+from hiho_pytorch_base.batch import BatchOutput
 from hiho_pytorch_base.config import Config
-from hiho_pytorch_base.dataset import DatasetType, create_dataset, prefetch_datas
+from hiho_pytorch_base.data_loader import create_prepared_data_loader
+from hiho_pytorch_base.dataset import (
+    Dataset,
+    DatasetCollection,
+    DatasetType,
+    create_dataset,
+)
 from hiho_pytorch_base.evaluator import (
     Evaluator,
     EvaluatorOutput,
@@ -79,6 +84,7 @@ class TrainingContext:
     """学習に必要な全てのオブジェクトをまとめる"""
 
     config: Config
+    datasets: DatasetCollection
     train_loader: DataLoader
     test_loader: DataLoader
     eval_loader: DataLoader | None
@@ -94,26 +100,6 @@ class TrainingContext:
     epoch: int
     iteration: int
     snapshot_path: UPath
-    close_prefetch: Callable[[], None]
-
-
-class FirstEpochOrderedSampler(Sampler[int]):
-    """初回エポックは指定順序、以降はランダムサンプリング。prefetchに有効。"""
-
-    def __init__(self, first_indices: list[int]) -> None:
-        self.first_indices = first_indices
-        self.first_epoch = True
-
-    def __iter__(self) -> Iterator[int]:  # noqa: D105
-        if self.first_epoch:
-            self.first_epoch = False
-            return iter(self.first_indices)
-        else:
-            indices_tensor = torch.tensor(self.first_indices)
-            return iter(indices_tensor[torch.randperm(len(indices_tensor))].tolist())
-
-    def __len__(self) -> int:  # noqa: D105
-        return len(self.first_indices)
 
 
 def create_data_loader(
@@ -121,17 +107,9 @@ def create_data_loader(
     dataset: Dataset,
     for_train: bool,
     for_eval: bool,
-    first_indices: list[int] | None,
 ) -> DataLoader:
     """DataLoaderを作成"""
     batch_size = config.train.eval_batch_size if for_eval else config.train.batch_size
-
-    if first_indices is not None:
-        sampler = FirstEpochOrderedSampler(first_indices)
-        shuffle = False
-    else:
-        sampler = None
-        shuffle = True
 
     num_workers = config.train.preprocess_workers
     if num_workers is None:
@@ -139,19 +117,15 @@ def create_data_loader(
         if num_workers is None:
             raise ValueError("Failed to get CPU count")
 
-    return DataLoader(
+    sampler = RandomSampler(dataset)
+
+    return create_prepared_data_loader(
         dataset=dataset,
         batch_size=batch_size,
-        shuffle=shuffle,
         sampler=sampler,
         num_workers=num_workers,
-        collate_fn=collate_dataset_output,
         pin_memory=config.train.use_gpu,
         drop_last=for_train,
-        timeout=(
-            0 if num_workers == 0 else 300
-        ),  # NOTE: ダウンロードが間に合わない可能性を考慮して長めにする
-        persistent_workers=num_workers > 0,
     )
 
 
@@ -167,39 +141,20 @@ def setup_training_context(
     # dataset
     datasets = create_dataset(config.dataset)
 
-    # prefetch
-    train_indices = torch.randperm(len(datasets.train)).tolist()
-    close_prefetch = prefetch_datas(
-        train_datas=datasets.train.datas,
-        test_datas=datasets.test.datas,
-        valid_datas=datasets.valid.datas if datasets.valid is not None else None,
-        train_indices=train_indices,
-        train_batch_size=config.train.batch_size,
-        num_prefetch=config.train.prefetch_workers,
-    )
-
     # data loader
     train_loader = create_data_loader(
-        config,
-        datasets.train,
-        for_train=True,
-        for_eval=False,
-        first_indices=train_indices,
+        config, datasets.train, for_train=True, for_eval=False
     )
     test_loader = create_data_loader(
-        config, datasets.test, for_train=False, for_eval=False, first_indices=None
+        config, datasets.test, for_train=False, for_eval=False
     )
     eval_loader = (
-        create_data_loader(
-            config, datasets.eval, for_train=False, for_eval=True, first_indices=None
-        )
+        create_data_loader(config, datasets.eval, for_train=False, for_eval=True)
         if datasets.eval is not None
         else None
     )
     valid_loader = (
-        create_data_loader(
-            config, datasets.valid, for_train=False, for_eval=True, first_indices=None
-        )
+        create_data_loader(config, datasets.valid, for_train=False, for_eval=True)
         if datasets.valid is not None
         else None
     )
@@ -209,7 +164,11 @@ def setup_training_context(
     device = "cuda" if config.train.use_gpu else "cpu"
     if config.train.pretrained_predictor_path is not None:
         state_dict = torch.load(
-            BytesIO(config.train.pretrained_predictor_path.read_bytes()),
+            BytesIO(
+                datasets.file_cache.download(
+                    config.train.pretrained_predictor_path
+                ).read_bytes()
+            ),
             map_location=device,
         )
         predictor.load_state_dict(state_dict)
@@ -258,7 +217,7 @@ def setup_training_context(
 
     return TrainingContext(
         config=config,
-        close_prefetch=close_prefetch,
+        datasets=datasets,
         train_loader=train_loader,
         test_loader=test_loader,
         eval_loader=eval_loader,
@@ -364,7 +323,7 @@ def evaluate(context: TrainingContext) -> EvaluationResults:
         valid_result_list: list[EvaluatorOutput] = []
         for batch in context.valid_loader:
             batch = batch.to_device(context.device, non_blocking=True)
-            evaluator_result: EvaluatorOutput = context.evaluator(batch)
+            evaluator_result = context.evaluator(batch)
             valid_result_list.append(evaluator_result.detach_cpu())
         valid_result = reduce_result(valid_result_list)
 
@@ -457,7 +416,7 @@ def train(config_yaml_path: UPath, output_dir: UPath) -> None:
     try:
         training_loop(context)
     finally:
-        context.close_prefetch()
+        context.datasets.close()
         context.logger.close()
 
 

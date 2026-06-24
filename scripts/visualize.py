@@ -25,7 +25,6 @@ from hiho_pytorch_base.dataset import (
     create_dataset,
 )
 from hiho_pytorch_base.generator import Generator, GeneratorOutput
-from hiho_pytorch_base.utility.upath_utility import to_local_path
 
 
 @st.cache_resource
@@ -39,10 +38,10 @@ def _load_config_and_dataset(config_path_str: str) -> tuple[Config, DatasetColle
 @st.cache_resource
 def _load_generator(config_path_str: str, predictor_path_str: str) -> Generator:
     """configパスとpredictorパスからGeneratorを読み込みキャッシュする"""
-    config, _ = _load_config_and_dataset(config_path_str)
+    config, dataset_collection = _load_config_and_dataset(config_path_str)
     return Generator(
         config=config,
-        predictor=to_local_path(UPath(predictor_path_str)),
+        predictor=dataset_collection.file_cache.download(UPath(predictor_path_str)),
         use_gpu=False,
     )
 

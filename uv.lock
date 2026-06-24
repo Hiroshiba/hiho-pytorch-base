@@ -9,7 +9,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-06-16T02:30:23.921279Z"
+exclude-newer = "2026-06-17T09:22:11.824164Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -541,6 +541,7 @@ name = "hiho-pytorch-base"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "filelock" },
     { name = "h5py" },
     { name = "librosa" },
     { name = "numba" },
@@ -571,6 +572,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "filelock", specifier = ">=3.16.1" },
     { name = "h5py", specifier = ">=3.15.1" },
     { name = "librosa", specifier = ">=0.11.0" },
     { name = "numba", specifier = ">=0.59.0" },

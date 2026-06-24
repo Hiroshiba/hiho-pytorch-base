@@ -16,6 +16,8 @@ dataset:
     speaker_dict_path: "tests/data/test_data/speaker_dict.json"
     root_dir: "tests/data/test_data"
   hdf5_cache_dir: null
+  local_cache_dir: "tests/output_data/file_cache"
+  max_concurrent_downloads: 4 # NOTE: 本番では256が推奨
   train_num: null
   test_num: 10
   eval_for_test: true
@@ -49,7 +51,6 @@ train:
     name: "RAdamScheduleFree"
     lr: 0.003
   scheduler: null
-  prefetch_workers: 4 # NOTE: 本番では256が推奨
   preprocess_workers: 0 # NOTE: 本番ではnullが推奨
   use_gpu: false
   use_amp: false

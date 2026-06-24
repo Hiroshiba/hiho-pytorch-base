@@ -12,18 +12,17 @@ from hiho_pytorch_base.batch import BatchOutput, collate_dataset_output
 from hiho_pytorch_base.config import Config
 from hiho_pytorch_base.dataset import DatasetType, create_dataset
 from hiho_pytorch_base.generator import Generator
-from hiho_pytorch_base.utility.upath_utility import to_local_path
 from scripts.utility.save_arguments import save_arguments
 
 
-def _extract_number(f):
+def _extract_number(f: UPath) -> int:
     s = re.findall(r"\d+", str(f))
     return int(s[-1]) if s else -1
 
 
 def _get_predictor_model_path(
     model_dir: UPath, iteration: int | None = None, prefix: str = "predictor_"
-):
+) -> UPath:
     if iteration is None:
         model_path = sorted(model_dir.glob(prefix + "*.pth"), key=_extract_number)[-1]
     else:
@@ -42,7 +41,7 @@ def generate(
     output_dir: Path,
     use_gpu: bool,
     num_files: int | None,
-):
+) -> None:
     """設定にあるデータセットから生成する"""
     if predictor_path is None and model_dir is not None:
         predictor_path = _get_predictor_model_path(
@@ -61,34 +60,40 @@ def generate(
 
     config = Config.load(config_path)
 
-    generator = Generator(
-        config=config, predictor=to_local_path(predictor_path), use_gpu=use_gpu
-    )
-
-    dataset = create_dataset(config.dataset).get(dataset_type)
-    if num_files is not None:
-        if num_files > len(dataset):
-            raise ValueError(
-                f"num_files ({num_files}) がデータセットサイズ ({len(dataset)}) を超えています"
-            )
-        dataset.datas = dataset.datas[:num_files]
-
-    data_loader = DataLoader(
-        dataset=dataset,
-        batch_size=1,
-        shuffle=False,
-        collate_fn=collate_dataset_output,
-    )
-
-    batch: BatchOutput
-    for batch in tqdm(data_loader, desc="generate"):
-        batch.to_device(device="cuda" if use_gpu else "cpu", non_blocking=True)
-        _ = generator(
-            feature_vector=batch.feature_vector,
-            feature_variable=batch.feature_variable,
-            speaker_id=batch.speaker_id,
-            length=batch.length,
+    datasets = create_dataset(config.dataset)
+    try:
+        generator = Generator(
+            config=config,
+            predictor=datasets.file_cache.download(predictor_path),
+            use_gpu=use_gpu,
         )
+
+        dataset = datasets.get(dataset_type)
+        if num_files is not None:
+            if num_files > len(dataset):
+                raise ValueError(
+                    f"num_files ({num_files}) がデータセットサイズ ({len(dataset)}) を超えています"
+                )
+            dataset.datas = dataset.datas[:num_files]
+
+        data_loader = DataLoader(
+            dataset=dataset,
+            batch_size=1,
+            shuffle=False,
+            collate_fn=collate_dataset_output,
+        )
+
+        batch: BatchOutput
+        for batch in tqdm(data_loader, desc="generate"):
+            batch.to_device(device="cuda" if use_gpu else "cpu", non_blocking=True)
+            _ = generator(
+                feature_vector=batch.feature_vector,
+                feature_variable=batch.feature_variable,
+                speaker_id=batch.speaker_id,
+                length=batch.length,
+            )
+    finally:
+        datasets.close()
 
 
 if __name__ == "__main__":
